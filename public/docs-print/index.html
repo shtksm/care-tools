@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>申請書印刷</title>
+  <link rel="stylesheet" href="../assets/css/common.css" />
+  <meta name="robots" content="noindex,nofollow" />
+  <style>
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .doclist { display:grid; gap:8px; margin-top:10px; }
+    .docitem { display:flex; gap:10px; align-items:flex-start; padding:10px; border:1px solid var(--border); border-radius:14px; background:#fff; }
+    .docitem:hover { background:#fafafa; }
+    .docmeta { flex:1; min-width: 220px; }
+    .docmeta .title { font-weight:800; margin-bottom:2px; }
+    .docmeta .file { color:var(--muted); font-size:12px; }
+    .docactions { display:flex; gap:8px; flex-wrap:wrap; }
+    .small { font-size:12px; color:var(--muted); line-height:1.6; }
+    .stickybar { position: sticky; bottom: 12px; margin-top:12px; }
+    .bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:12px; border:1px solid var(--border); border-radius:16px; background:#fff; box-shadow: var(--shadow); }
+    .right { margin-left:auto; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .warn { color:#b45309; font-weight:800; }
+    .radio-group{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .radio{
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      padding:8px 10px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      background:#fff;
+      cursor:pointer;
+      user-select:none;
+      font-weight:700;
+      color:var(--text);
+    }
+    .radio input{ margin:0; }
+    @media (max-width: 900px){
+      .grid2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">社内ツール</div>
+      <nav class="nav">
+        <a class="nav-item" href="../">ホーム</a>
+        <a class="nav-item active" href="./">申請書印刷</a>
+      </nav>
+
+      <div class="hint">
+        <div class="hint-title">使い方</div>
+        <ul>
+          <li>シーンを選ぶと典型セットが自動でチェック</li>
+          <li>その後に手動で追加/削除OK</li>
+          <li>届出は「なし/あり/両面あり」を選択（通常はなし）</li>
+          <li><span class="kbd">記入してまとめPDFを作成</span> → 開いたら <span class="kbd">Ctrl</span>+<span class="kbd">P</span></li>
+        </ul>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="header">
+        <h1>申請書印刷（記入 → 結合 → 出力）</h1>
+        <div class="sub">
+          定型情報（包括名/住所など）をPDFに書き込み → 選択分を1つのPDFに結合します。
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="grid2">
+          <div>
+            <label class="muted" for="scene"><strong>シーン（典型セット）</strong></label>
+            <div class="row" style="margin-top:6px;">
+              <select id="scene" class="input" style="max-width: 360px;"></select>
+              <button id="applyScene" class="btn primary" type="button">このシーンを適用</button>
+              <button id="clearAll" class="btn" type="button">チェック全解除</button>
+            </div>
+            <div class="small" style="margin-top:8px;">
+              ※「適用」は<strong>チェックを置き換え</strong>ます（シーンのセットにリセット）。<br/>
+              適用後に、必要に応じて手動で追加/削除してください。
+            </div>
+          </div>
+
+          <div>
+            <label class="muted"><strong>届出（毎回判断）</strong></label>
+            <div class="row" style="margin-top:6px;">
+              <div class="radio-group" role="radiogroup" aria-label="届出の有無">
+                <label class="radio" title="通常はこちら（届出を印刷しない）">
+                  <input type="radio" name="noticeMode" value="none" checked />
+                  なし
+                </label>
+                <label class="radio" title="notice.pdf を印刷に含める（記入あり）">
+                  <input type="radio" name="noticeMode" value="single" />
+                  あり
+                </label>
+                <label class="radio" title="notice.pdf を2枚（1枚目：記入あり / 2枚目：記入なし）">
+                  <input type="radio" name="noticeMode" value="double" />
+                  両面あり
+                </label>
+              </div>
+              <span id="count" class="badge">0 件</span>
+              <span id="selected" class="badge">選択 0 件</span>
+            </div>
+            <div class="small" style="margin-top:8px;">
+              「両面あり」は <span class="kbd">notice.pdf</span> を2枚出します（1枚目は記入あり、2枚目は元のまま）。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>文書一覧</h2>
+        <div class="small">
+          PDFは <span class="kbd">docs/</span> に置きます（記入してから結合します）。
+        </div>
+
+        <div id="doclist" class="doclist" aria-live="polite" style="margin-top:12px;"></div>
+      </section>
+
+      <div class="stickybar">
+        <div class="bar">
+          <div>
+            <strong>まとめPDF</strong>
+            <div class="small">チェックした文書を順番に結合します（並び順は一覧順）。</div>
+          </div>
+          <div class="right">
+            <span id="status" class="small"></span>
+            <button id="makePdf" class="btn primary" type="button">記入してまとめPDFを作成</button>
+            <a id="downloadLink" class="btn" href="#" download style="display:none;">生成PDFを保存</a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- pdf-lib -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+  <script>
+    // ============================
+    // A) 定型情報（ここを書き換える）
+    // ============================
+    const OFFICE = {
+      name: "池田市さわやか地域包括支援センター",
+      address: "563-0025  池田市城南3-1-40",
+      tel: "072-754-6789",
+      fax: "00-0000-0001",
+    };
+
+    // ============================
+    // B) 文書リスト（届出は別枠）
+    // ============================
+    const documents = [
+      { id: "apply_new",      title: "介護保険申請（新規）", file: "apply_new.pdf" },
+      { id: "apply_change",   title: "変更申請",             file: "apply_change.pdf" },
+      { id: "assessment",     title: "認定調査",             file: "assessment.pdf" },
+      { id: "questionnaire",  title: "問診表",               file: "questionnaire.pdf" },
+      { id: "checklist",      title: "基本チェックリスト",   file: "checklist.pdf" },
+    ];
+
+    // ★届出：両面ありは notice.pdf を2枚（記入あり + 記入なし）
+    const NOTICE_FILES = {
+      base: "notice.pdf"
+    };
+
+    // ============================
+    // C) シーン（典型セット）
+    // ============================
+    const scenes = [
+      { key: "new_home",   label: "新規/更新申請（在宅）",       ids: ["apply_new",  "questionnaire", "assessment"] },
+      { key: "new_hosp",   label: "新規/更新申請（入院）",       ids: ["apply_new",  "assessment"] },
+      { key: "new_check",  label: "更新申請（チェックリスト）",  ids: ["checklist"] },
+      { key: "chg_home",   label: "区変申請（在宅）",           ids: ["apply_change", "questionnaire", "assessment"] },
+      { key: "chg_hosp",   label: "区変申請（入院）",           ids: ["apply_change", "assessment"] },
+    ];
+
+    // ============================
+    // D) 印字座標（左下(0,0) / x左から y下から）
+    // ============================
+    const PRINT_MAP = {
+      "apply_new.pdf": {
+        page: 0,
+        fontSize: 10,
+        fields: {
+          name:    { x: 380, y: 400 },
+          address: { x: 150, y: 370 },
+        }
+      },
+      "apply_change.pdf": {
+        page: 0,
+        fontSize: 10,
+        fields: {
+          name:    { x: 380, y: 400 },
+          address: { x: 150, y: 370 },
+        }
+      },
+      "checklist.pdf": {
+        page: 0,
+        fontSize: 10,
+        fields: {
+          name:    { x: 400, y: 670 },
+        }
+      },
+      "notice.pdf": {
+        page: 0,
+        fontSize: 10,
+        fields: {
+          name:    { x: 80, y: 140 },
+          address: { x: 80, y: 125 },
+          tel:     { x: 80, y: 110 },
+          fax:     { x: 240, y: 110 },
+        }
+      },
+    };
+
+    // ============================
+    // DOM / state
+    // ============================
+    const doclistEl = document.getElementById("doclist");
+    const countEl = document.getElementById("count");
+    const selectedEl = document.getElementById("selected");
+    const sceneEl = document.getElementById("scene");
+    const applySceneBtn = document.getElementById("applyScene");
+    const clearAllBtn = document.getElementById("clearAll");
+    const makePdfBtn = document.getElementById("makePdf");
+    const statusEl = document.getElementById("status");
+    const downloadLink = document.getElementById("downloadLink");
+    const noticeRadios = Array.from(document.querySelectorAll('input[name="noticeMode"]'));
+
+    const selectedIds = new Set();
+    let noticeMode = "none";
+    let cachedFontBytes = null;
+
+    function escapeHtml(str){
+      return str.replace(/[&<>"']/g, s => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[s]));
+    }
+
+    function docUrl(file){
+      return `./docs/${encodeURIComponent(file)}`;
+    }
+
+    async function fetchBytes(url){
+      const res = await fetch(url, { cache: "no-store" });
+      if(!res.ok) throw new Error(`取得に失敗: ${url} (${res.status})`);
+      return new Uint8Array(await res.arrayBuffer());
+    }
+
+    function renderSceneOptions(){
+      sceneEl.innerHTML = "";
+      const opt0 = document.createElement("option");
+      opt0.value = "";
+      opt0.textContent = "（選択してください）";
+      sceneEl.appendChild(opt0);
+
+      for(const s of scenes){
+        const opt = document.createElement("option");
+        opt.value = s.key;
+        opt.textContent = s.label;
+        sceneEl.appendChild(opt);
+      }
+    }
+
+    function applyScene(key){
+      const scene = scenes.find(s => s.key === key);
+      if(!scene) return;
+      selectedIds.clear();
+      for(const id of scene.ids) selectedIds.add(id);
+      updateUI();
+    }
+
+    function clearAll(){
+      selectedIds.clear();
+      updateUI();
+    }
+
+    function renderDocs(){
+      doclistEl.innerHTML = "";
+      for(const d of documents){
+        const checked = selectedIds.has(d.id);
+        const item = document.createElement("div");
+        item.className = "docitem";
+        item.innerHTML = `
+          <div>
+            <input type="checkbox" data-id="${escapeHtml(d.id)}" ${checked ? "checked" : ""} />
+          </div>
+          <div class="docmeta">
+            <div class="title">${escapeHtml(d.title)}</div>
+            <div class="file"><span class="kbd">${escapeHtml(d.file)}</span></div>
+          </div>
+          <div class="docactions">
+            <a class="btn" href="${docUrl(d.file)}" target="_blank" rel="noopener">開く</a>
+          </div>
+        `;
+        doclistEl.appendChild(item);
+      }
+      countEl.textContent = `${documents.length} 件`;
+      selectedEl.textContent = `選択 ${selectedIds.size} 件`;
+    }
+
+    function updateUI(){
+      renderDocs();
+      selectedEl.textContent = `選択 ${selectedIds.size} 件`;
+    }
+
+    function orderedSelectedDocs(){
+      return documents.filter(d => selectedIds.has(d.id));
+    }
+
+    // ★ここが改修ポイント：
+    // - single: notice.pdf（記入あり）を1枚
+    // - double: notice.pdf（記入あり） + notice.pdf（記入なし）の2枚
+    function noticeDocsIfAny(){
+      if(noticeMode === "single"){
+        return [
+          { title: "届出（あり：記入あり）", file: NOTICE_FILES.base, stamp: true },
+        ];
+      }
+      if(noticeMode === "double"){
+        return [
+          { title: "届出（両面：表/記入あり）", file: NOTICE_FILES.base, stamp: true },
+          { title: "届出（両面：裏/記入なし）", file: NOTICE_FILES.base, stamp: false },
+        ];
+      }
+      return [];
+    }
+
+    // ===== fontkit & font =====
+    async function loadFontkit(){
+      if(window.fontkit) return window.fontkit;
+      return await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "https://unpkg.com/@pdf-lib/fontkit@1.1.1/dist/fontkit.umd.min.js";
+        s.onload = () => resolve(window.fontkit);
+        s.onerror = () => reject(new Error("fontkitの読み込みに失敗しました"));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function getFontBytes(){
+      if(cachedFontBytes) return cachedFontBytes;
+      cachedFontBytes = await fetchBytes("../assets/fonts/NotoSansJP-Regular.ttf");
+      return cachedFontBytes;
+    }
+
+    async function embedJapaneseFont(pdfDoc){
+      const fk = await loadFontkit();
+      pdfDoc.registerFontkit(fk);
+      const fontBytes = await getFontBytes();
+      return await pdfDoc.embedFont(fontBytes, { subset: false });
+    }
+
+    function officeTextByKey(key){
+      if(key === "name") return OFFICE.name;
+      if(key === "address") return OFFICE.address;
+      if(key === "tel") return OFFICE.tel;
+      if(key === "fax") return OFFICE.fax;
+      return "";
+    }
+
+    function getPrintConfig(file){
+      return PRINT_MAP[file] || null;
+    }
+
+    // stamp=true のときだけ定型情報を上書き
+    async function buildPdfBytesMaybeStamped(file, stamp){
+      const bytes = await fetchBytes(docUrl(file));
+      if(!stamp) return bytes;
+
+      const pdfDoc = await PDFLib.PDFDocument.load(bytes);
+      const cfg = getPrintConfig(file);
+      if(!cfg){
+        // stamp対象だけど座標が無い→そのまま返す
+        return await pdfDoc.save();
+      }
+
+      const font = await embedJapaneseFont(pdfDoc);
+      const pages = pdfDoc.getPages();
+      const page = pages[cfg.page ?? 0];
+
+      const size = cfg.fontSize ?? 10;
+      const fields = cfg.fields || {};
+
+      for(const [k, pos] of Object.entries(fields)){
+        const raw = officeTextByKey(k);
+        const text = (raw || "").normalize("NFC");
+        if(!text) continue;
+
+        page.drawText(text, {
+          x: pos.x,
+          y: pos.y,
+          size,
+          font,
+          color: PDFLib.rgb(0, 0, 0),
+        });
+      }
+
+      return await pdfDoc.save();
+    }
+
+    async function makeCombinedPdf(){
+      downloadLink.style.display = "none";
+      downloadLink.href = "#";
+
+      const picked = orderedSelectedDocs().map(d => ({ title: d.title, file: d.file, stamp: true }));
+      const noticeDocs = noticeDocsIfAny(); // stamp true/false混在
+
+      // 届出は先頭
+      const finalList = [...noticeDocs, ...picked];
+
+      if(finalList.length === 0){
+        statusEl.innerHTML = '<span class="warn">文書が選択されていません</span>';
+        return;
+      }
+      if(!window.PDFLib){
+        statusEl.innerHTML = '<span class="warn">PDF結合ライブラリの読み込みに失敗しました</span>';
+        return;
+      }
+
+      makePdfBtn.disabled = true;
+      applySceneBtn.disabled = true;
+      clearAllBtn.disabled = true;
+
+      try{
+        statusEl.textContent = `処理中…（${finalList.length}件）`;
+
+        await loadFontkit();
+        await getFontBytes();
+
+        const outPdf = await PDFLib.PDFDocument.create();
+
+        let i = 0;
+        for(const d of finalList){
+          i++;
+          statusEl.textContent = `処理中… ${i}/${finalList.length}：${d.title}`;
+
+          const srcBytes = await buildPdfBytesMaybeStamped(d.file, d.stamp);
+          const srcPdf = await PDFLib.PDFDocument.load(srcBytes);
+
+          const pageIndices = srcPdf.getPageIndices();
+          const copiedPages = await outPdf.copyPages(srcPdf, pageIndices);
+          copiedPages.forEach(p => outPdf.addPage(p));
+        }
+
+        statusEl.textContent = "生成中…";
+        const outBytes = await outPdf.save();
+
+        const blob = new Blob([outBytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+
+        window.open(url, "_blank", "noopener");
+
+        const filename = `まとめ_${new Date().toISOString().slice(0,10)}.pdf`;
+        downloadLink.href = url;
+        downloadLink.download = filename;
+        downloadLink.style.display = "inline-flex";
+
+        statusEl.textContent = "記入済みのまとめPDFを作成しました。開いたPDFで Ctrl+P してください。";
+      }catch(err){
+        console.error(err);
+        statusEl.innerHTML = `<span class="warn">失敗：</span>${escapeHtml(String(err.message || err))}`;
+      }finally{
+        makePdfBtn.disabled = false;
+        applySceneBtn.disabled = false;
+        clearAllBtn.disabled = false;
+      }
+    }
+
+    // イベント
+    document.addEventListener("change", (e) => {
+      const cb = e.target.closest('input[type="checkbox"][data-id]');
+      if(cb){
+        const id = cb.getAttribute("data-id");
+        if(cb.checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+        selectedEl.textContent = `選択 ${selectedIds.size} 件`;
+        return;
+      }
+
+      const r = e.target.closest('input[type="radio"][name="noticeMode"]');
+      if(r){
+        noticeMode = r.value;
+        return;
+      }
+    });
+
+    applySceneBtn.addEventListener("click", () => applyScene(sceneEl.value));
+    clearAllBtn.addEventListener("click", clearAll);
+    makePdfBtn.addEventListener("click", makeCombinedPdf);
+
+    // 初期化
+    renderSceneOptions();
+    noticeMode = "none";
+    noticeRadios.forEach(r => r.checked = (r.value === noticeMode));
+    updateUI();
+  </script>
+
+  <script src="../assets/js/common.js"></script>
+</body>
+</html>
